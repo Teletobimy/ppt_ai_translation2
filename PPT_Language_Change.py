@@ -287,12 +287,22 @@ def build_tone_instructions(tone: str) -> str:
     # fallback
     return "Use a neutral professional tone appropriate for the beauty industry."
 
-def build_chinese_prompt(tagged_text: str, target_lang: str) -> str:
+def _format_glossary_lines(glossary: dict | None) -> str:
+    if not glossary:
+        return ""
+    lines = ["\n# 용어집 (엄격 적용)"]
+    for src, tgt in glossary.items():
+        lines.append(f"- '{src}' → '{tgt}' (마커 내부 텍스트에만 적용)")
+    return "\n".join(lines) + "\n"
+
+
+def build_chinese_prompt(tagged_text: str, target_lang: str, glossary: dict | None = None) -> str:
     """
     전문적인 한국어→중국어 번역을 위한 프롬프트 (간체/번체 구분)
     """
     chinese_type = "간체" if "Simplified" in target_lang else "번체"
     
+    glossary_text = _format_glossary_lines(glossary)
     return (
         f"당신은 한국어를 정확하고 자연스러운 중국어({chinese_type})로 번역하는 전문가입니다.\n\n"
         f"# 주요 특징\n"
@@ -303,9 +313,10 @@ def build_chinese_prompt(tagged_text: str, target_lang: str) -> str:
         f"- 창의적 재해석 없이 원문에 충실한 번역 수행\n"
         f"- 반드시 중국어 {chinese_type}로 번역하세요\n\n"
         f"# 고유명사 처리 규칙\n"
-        f"- '피더린'은 'PYDERIN'으로 번역하세요 (브랜드명이므로 대문자로)\n"
-        f"- 기타 고유명사(인명, 지명, 회사명, 브랜드명 등)는 번역하지 말고 원문 그대로 유지하세요\n"
-        f"- 영어 고유명사는 그대로 유지하세요\n\n"
+        f"- 아래 용어집에 명시된 항목은 반드시 지정된 표기로 치환하세요.\n"
+        f"- 용어집에 없는 고유명사(인명, 지명, 회사명, 브랜드명 등)는 번역하지 말고 원문 표기를 유지하세요.\n"
+        f"- 영어 고유명사는 그대로 유지하세요.\n"
+        f"{glossary_text}"
         f"다음 한국어 텍스트를 자연스러운 중국어({chinese_type})로 번역하세요.\n"
         f"중요: 단락 마커 [[P#]]...[[/P#]]와 런 마커 [[R#]]...[[/R#]]는 절대 변경하거나 제거하지 마세요.\n"
         f"- 단락 개수(P#)와 순서를 정확히 유지하세요.\n"
@@ -313,18 +324,21 @@ def build_chinese_prompt(tagged_text: str, target_lang: str) -> str:
         f"번역할 텍스트:\n{tagged_text}"
     )
 
-def build_prompt(tagged_text: str, target_lang: str, tone: str) -> str:
+def build_prompt(tagged_text: str, target_lang: str, tone: str, glossary: dict | None = None) -> str:
     # Chinese translation uses specialized prompt
     if "Chinese" in target_lang:
-        return build_chinese_prompt(tagged_text, target_lang)
+        return build_chinese_prompt(tagged_text, target_lang, glossary)
     
     tone_text = build_tone_instructions(tone)
+    glossary_text = _format_glossary_lines(glossary)
     return (
         f"Translate the following beauty industry presentation text into natural, professional {target_lang}. "
         f"Only return the translated text. If there is nothing to translate, return an empty string. "
         f"Context: {tone_text} "
         f"Avoid literal translation—use expressions that sound natural for beauty marketing and professional skincare. "
         f"If the source is already in {target_lang}, lightly copyedit for clarity, consistency, and terminology. "
+        f"Use the glossary strictly when provided: replace source terms with the specified target forms without alteration. "
+        f"{glossary_text}"
         f"CRITICAL: Do NOT alter or remove any marker tags. Preserve both paragraph markers [[P#]]...[[/P#]] and run markers [[R#]]...[[/R#]] exactly, including counts and order. "
         f"Return ONLY the translated text with all markers preserved:\n\n{tagged_text}"
     )
@@ -332,7 +346,7 @@ def build_prompt(tagged_text: str, target_lang: str, tone: str) -> str:
 
 
 # ---------- [번역 호출] ----------
-def gpt_translate_tagged(tagged_text: str, client, target_lang: str, tone: str, use_deepseek=False) -> str:
+def gpt_translate_tagged(tagged_text: str, client, target_lang: str, tone: str, use_deepseek=False, glossary: dict | None = None) -> str:
     # 진짜 내용이 없으면 번역 스킵
     if not tagged_text.strip() or is_effectively_empty_tagged(tagged_text):
         return ""
@@ -340,10 +354,10 @@ def gpt_translate_tagged(tagged_text: str, client, target_lang: str, tone: str, 
     # 중국어 번역의 경우 DeepSeek 사용
     if "Chinese" in target_lang and use_deepseek:
         deepseek_client = create_deepseek_client()
-        prompt = build_chinese_prompt(tagged_text, target_lang)
+        prompt = build_chinese_prompt(tagged_text, target_lang, glossary)
         content = safe_request(deepseek_client, prompt, retries=3, delay=3, use_deepseek=True)
     else:
-        prompt = build_prompt(tagged_text, target_lang, tone)
+        prompt = build_prompt(tagged_text, target_lang, tone, glossary)
         content = safe_request(client, prompt, retries=3, delay=3)
 
     # 실패 시 원문(마커 포함) 반환 → 원문 유지
@@ -580,7 +594,7 @@ def choose_font_scale_window() -> int:
 
 
 # ---------- [본 처리] ----------
-def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deepseek=False, font_scale_percent: int = 100, on_progress=None):
+def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deepseek=False, font_scale_percent: int = 100, on_progress=None, glossary: dict | None = None):
     print(f"📂 파일: {pptx_path}")
     print(f"🌐 대상 언어: {target_lang}")
     print(f"🎙 톤: {tone}")
@@ -696,7 +710,7 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
         block_tagged, style_maps, has_any = tag_paragraphs_block(paragraphs)
         if not has_any:
             return  # nothing to translate
-        translated_block = gpt_translate_tagged(block_tagged, client, target_lang, tone, use_deepseek)
+        translated_block = gpt_translate_tagged(block_tagged, client, target_lang, tone, use_deepseek, glossary)
         translated_block = translated_block.strip().strip('"').strip("'")
         if chinese_review_enabled:
             review_result = gpt_review_chinese_translation(block_tagged, translated_block, client, use_deepseek)
@@ -711,7 +725,7 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
                 tagged, style_map = tag_paragraph(p)
                 if not tagged:
                     continue
-                t = gpt_translate_tagged(tagged, client, target_lang, tone, use_deepseek)
+                t = gpt_translate_tagged(tagged, client, target_lang, tone, use_deepseek, glossary)
                 t = t.strip().strip('"').strip("'")
                 if chinese_review_enabled:
                     rr = gpt_review_chinese_translation(tagged, t, client, use_deepseek)

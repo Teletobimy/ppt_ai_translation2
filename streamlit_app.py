@@ -47,6 +47,30 @@ if "Chinese" in target_lang:
 
 font_scale = st.slider("번역 후 폰트 크기 배율(%)", min_value=50, max_value=300, value=100, step=5)
 
+with st.expander("고유 명사/용어집 (선택)"):
+    st.markdown("입력 형식: 한 줄당 `원문 - 번역어` 형태. 예: `리쥬부스터 - rejuvuster`")
+    glossary_text = st.text_area(
+        "용어집",
+        value="",
+        height=120,
+        placeholder="피더란 - PYDERIN\n리쥬부스터 - rejuvuster",
+    )
+
+def parse_glossary(text: str) -> dict:
+    result = {}
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        # split on first hyphen
+        if "-" in line:
+            src, tgt = line.split("-", 1)
+            src = src.strip()
+            tgt = tgt.strip()
+            if src and tgt:
+                result[src] = tgt
+    return result
+
 run = st.button("번역 시작")
 
 if run:
@@ -70,6 +94,7 @@ if run:
                 except Exception:
                     pass
 
+            glossary = parse_glossary(glossary_text)
             out_path = translate_presentation(
                 src_path,
                 target_lang=target_lang,
@@ -77,6 +102,7 @@ if run:
                 use_deepseek=use_deepseek,
                 font_scale_percent=font_scale,
                 on_progress=on_progress,
+                glossary=glossary if glossary else None,
             )
             status.update(label="번역 완료", state="complete")
 
