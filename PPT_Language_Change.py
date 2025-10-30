@@ -3,8 +3,6 @@
 import os
 import re
 import time
-import tkinter as tk
-from tkinter import filedialog, messagebox
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE_TYPE
@@ -412,6 +410,10 @@ def gpt_review_chinese_translation(original_korean: str, translated_chinese: str
 
 # ---------- [파일/언어/톤 선택 UI] ----------
 def choose_pptx_with_dialog() -> str:
+    # Lazy import Tkinter for desktop-only usage
+    import tkinter as tk  # type: ignore
+    from tkinter import filedialog  # type: ignore
+
     root = tk.Tk()
     root.withdraw()
     root.update_idletasks()
@@ -428,11 +430,13 @@ def choose_language_with_window() -> str:
     def on_start():
         v = var.get().strip()
         if not v:
+            from tkinter import messagebox  # type: ignore
             messagebox.showwarning("알림", "언어를 선택하세요.")
             return
         sel["value"] = v
         win.destroy()
 
+    import tkinter as tk  # type: ignore
     win = tk.Tk()
     win.title("Target Language")
     win.geometry("360x160")
@@ -459,12 +463,14 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     def on_start():
         v = var.get().strip()
         if not v:
+            from tkinter import messagebox  # type: ignore
             messagebox.showwarning("알림", "톤을 선택하세요.")
             return
         sel["value"] = v
         sel["use_deepseek"] = deepseek_var.get()
         win.destroy()
 
+    import tkinter as tk  # type: ignore
     win = tk.Tk()
     win.title("Target Tone & DeepSeek Option")
     win.geometry("450x280")
@@ -532,13 +538,16 @@ def choose_font_scale_window() -> int:
         try:
             v = int(entry.get().strip())
             if v < 50 or v > 300:
+                from tkinter import messagebox  # type: ignore
                 messagebox.showwarning("알림", "50% ~ 300% 사이의 값을 입력하세요.")
                 return
             sel["value"] = v
             win.destroy()
         except Exception:
+            from tkinter import messagebox  # type: ignore
             messagebox.showwarning("알림", "정수 % 값을 입력하세요 (예: 90, 100, 120)")
 
+    import tkinter as tk  # type: ignore
     win = tk.Tk()
     win.title("Font Scale (%)")
     win.geometry("360x160")
