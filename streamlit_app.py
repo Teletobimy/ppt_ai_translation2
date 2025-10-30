@@ -58,12 +58,25 @@ if run:
         src_path = save_uploaded_to_tmp(uploaded)
         with st.status("번역 중...", expanded=True) as status:
             st.write("파일 처리 및 모델 호출 중...")
+            prog = st.progress(0)
+
+            def on_progress(done, total, msg):
+                try:
+                    if total > 0:
+                        pct = int(max(0, min(100, (done / total) * 100)))
+                        prog.progress(pct)
+                    if msg:
+                        status.update(label=f"번역 중... {msg}")
+                except Exception:
+                    pass
+
             out_path = translate_presentation(
                 src_path,
                 target_lang=target_lang,
                 tone=tone,
                 use_deepseek=use_deepseek,
                 font_scale_percent=font_scale,
+                on_progress=on_progress,
             )
             status.update(label="번역 완료", state="complete")
 

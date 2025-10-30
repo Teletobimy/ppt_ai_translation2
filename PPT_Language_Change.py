@@ -580,7 +580,7 @@ def choose_font_scale_window() -> int:
 
 
 # ---------- [본 처리] ----------
-def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deepseek=False, font_scale_percent: int = 100):
+def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deepseek=False, font_scale_percent: int = 100, on_progress=None):
     print(f"📂 파일: {pptx_path}")
     print(f"🌐 대상 언어: {target_lang}")
     print(f"🎙 톤: {tone}")
@@ -596,11 +596,21 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
     client = openai.OpenAI(api_key=openai_key)
 
     print("📖 프레젠테이션 로딩...")
+    if on_progress:
+        try:
+            on_progress(0, 0, "프레젠테이션 로딩 시작")
+        except Exception:
+            pass
     pres = Presentation(pptx_path)
 
     slide_count = len(pres.slides)
     print(f"🖼 슬라이드 수: {slide_count}")
     print(f"🔍 폰트 배율: {font_scale_percent}%")
+    if on_progress:
+        try:
+            on_progress(0, slide_count, f"슬라이드 수: {slide_count}")
+        except Exception:
+            pass
     
     # ---------- [블록 태깅/재구성 유틸] ----------
     def tag_paragraphs_block(paragraphs):
@@ -733,9 +743,19 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
             return
 
     for s_idx, slide in enumerate(pres.slides, start=1):
+        if on_progress:
+            try:
+                on_progress(s_idx - 1, slide_count, f"슬라이드 {s_idx}/{slide_count} 번역 중")
+            except Exception:
+                pass
         print(f"▶ 슬라이드 {s_idx}/{slide_count}")
         for shape in slide.shapes:
             traverse_shape(shape)
+        if on_progress:
+            try:
+                on_progress(s_idx, slide_count, f"슬라이드 {s_idx}/{slide_count} 완료")
+            except Exception:
+                pass
 
     # ---------- [폰트 스케일 적용] ----------
     def apply_font_scale(presentation, scale_percent: int):
@@ -801,8 +821,18 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
 
     print("-" * 60)
     print("💾 저장 중...")
+    if on_progress:
+        try:
+            on_progress(slide_count, slide_count, "저장 중...")
+        except Exception:
+            pass
     pres.save(outfile_path)
     print(f"✅ 번역 완료! 저장된 파일: {outfile_path}")
+    if on_progress:
+        try:
+            on_progress(slide_count, slide_count, f"완료: {outfile_path}")
+        except Exception:
+            pass
     return outfile_path
 
 
