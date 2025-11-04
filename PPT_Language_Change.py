@@ -378,6 +378,20 @@ def build_prompt(tagged_text: str, target_lang: str, tone: str, glossary: dict |
         if glossary_text:
             prompt_template += glossary_text
         
+        # 반환 규칙 추가 (불필요한 설명/질문 방지)
+        return_rule = (
+            "\n\n"
+            "🚫 엄격한 반환 규칙 (반드시 준수):\n"
+            "- 번역된 텍스트만 반환하세요. 설명, 질문, 인사말을 절대 추가하지 마세요.\n"
+            "- '물론입니다', '번역할 텍스트를 제공해 주시면', 'Is there anything specific', 'You need to verify', "
+            "'The translation is:', '번역:', 'Translation:', 'The translation of the provided text is:' 같은 접두어/접미어를 사용하지 마세요.\n"
+            "- 마커가 포함된 원본 텍스트를 번역하여 마커와 함께 반환하세요.\n"
+            "- 예: 입력이 '[[P1]]안녕하세요[[/P1]]'이면 '[[P1]]Hello[[/P1]]'만 반환하세요.\n"
+            "- 마커 외의 추가 텍스트는 절대 포함하지 마세요.\n"
+            "- 번역 결과는 오직 마커가 포함된 번역된 텍스트만이어야 합니다.\n"
+        )
+        prompt_template += return_rule
+        
         # 번역할 텍스트 추가
         prompt_template += f"\n\n번역할 텍스트:\n{tagged_text}"
         
