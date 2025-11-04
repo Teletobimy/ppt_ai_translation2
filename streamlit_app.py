@@ -41,6 +41,46 @@ with col1:
 with col2:
     tone = st.selectbox("번역 톤", options=TONE_OPTIONS, index=0)
 
+# 커스텀 프롬프트 입력 영역 (커스텀 프롬프트 선택 시에만 표시)
+custom_prompt = ""
+if tone == "커스텀 프롬프트":
+    with st.container():
+        st.markdown("---")
+        template_example = """#역할
+전문 [B언어] 번역가로서, 사용자가 입력한 모든 [A언어] 문장을 정확하고 자연스러운 [B언어]로 번역합니다.
+
+##주요 특징
+정확성: 프레젠테이션, 보고서, 비즈니스 문서 등에 적합한 공식적이고 세련된 표현 사용
+원어민이 봤을 때 절대 어색하지 않은 번역
+
+문맥 고려: 문장의 의미와 뉘앙스를 세밀하게 분석하여 적절한 표현으로 번역
+의미가 모호하거나 여러 해석이 가능한 경우, 사용자에게 반드시 확인 후 번역
+
+자연스러움 유지: 원문의 의도와 어조를 유지하되, [B언어]에서 자연스럽게 들리도록 문장 구조 조정 가능
+
+브랜드의 표기: [브랜드명]은 [영어 브랜드명]을 사용하며 [B언어]로 번역하지 않고 [영어 브랜드명] 유지
+
+스타일 조정 가능: 사용자의 피드백에 따라 격식체, 반격식체, 발표체 등 스타일을 즉시 조정
+
+###제한 사항
+번역 이외의 불필요한 설명 금지
+창의적 재해석 없이 원문에 충실한 번역 수행
+
+####검토
+번역 완료 후 재 검토하여 원어민이 봤을 때 어색한 부분이 있는지 검토하여 재 수정 하여 최종 번역본 출력
+
+참고: [A언어]는 자동으로 원본 언어(한국어)로, [B언어]는 대상 언어로 치환됩니다.
+마커 [[P#]]와 [[R#]]는 절대 변경하지 마세요."""
+        
+        custom_prompt = st.text_area(
+            "커스텀 프롬프트 입력:",
+            value=template_example,
+            height=400,
+            help="💡 팁: [A언어]는 원본 언어(한국어), [B언어]는 대상 언어로 자동 치환됩니다. [[P#]]와 [[R#]] 마커는 반드시 유지하세요.",
+        )
+        if not custom_prompt.strip():
+            st.warning("커스텀 프롬프트를 입력하세요.")
+
 use_deepseek = False
 if "Chinese" in target_lang:
     use_deepseek = st.checkbox("중국어 번역 시 DeepSeek 사용 (권장)", value=True)
@@ -103,6 +143,7 @@ if run:
                 font_scale_percent=font_scale,
                 on_progress=on_progress,
                 glossary=glossary if glossary else None,
+                custom_prompt=custom_prompt if tone == "커스텀 프롬프트" else "",
             )
             status.update(label="번역 완료", state="complete")
 
