@@ -529,20 +529,20 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     sel = {"value": "", "custom_prompt": "", "use_deepseek": False}
 
     def on_tone_change(*args):
-        """톤 선택 변경 시 텍스트 입력 필드 표시/숨김"""
+        """톤 선택 변경 시 텍스트 입력 필드 활성화/비활성화"""
         selected = var.get().strip()
         if selected == "커스텀 프롬프트":
-            custom_frame.pack(fill="both", expand=True, pady=(10, 0))  # 표시
+            custom_textbox.config(state='normal')  # 텍스트 입력 활성화
             info.pack_forget()  # 기존 설명 숨김
             if deepseek_frame:
                 deepseek_frame.pack_forget()  # DeepSeek 옵션도 숨김 (공간 확보)
             win.geometry("750x700")  # 창 크기 확대
         else:
-            custom_frame.pack_forget()  # 숨김
+            custom_textbox.config(state='disabled')  # 텍스트 입력 비활성화
             info.pack(anchor="w", pady=8)  # 설명 표시
             if deepseek_frame:
                 deepseek_frame.pack(fill="x", pady=(10, 0), before=info)  # DeepSeek 옵션 다시 표시
-            win.geometry("450x280")  # 원래 크기로
+            win.geometry("750x500")  # 텍스트 영역은 보이지만 크기 조정
 
     def on_start():
         v = var.get().strip()
@@ -569,7 +569,7 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     
     win = tk.Tk()
     win.title("Target Tone & DeepSeek Option")
-    win.geometry("450x280")
+    win.geometry("750x500")  # 초기 크기 확대 (텍스트 영역이 보이도록)
     win.resizable(True, True)
 
     frm = tk.Frame(win, padx=12, pady=12)
@@ -582,9 +582,9 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     opt = tk.OptionMenu(frm, var, *TONE_OPTIONS)
     opt.pack(fill="x")
 
-    # 커스텀 프롬프트 입력 영역 (톤 선택 드롭다운 바로 아래에 위치, 초기에는 숨김)
+    # 커스텀 프롬프트 입력 영역 (톤 선택 드롭다운 바로 아래에 위치, 처음부터 보임)
     custom_frame = tk.Frame(frm)
-    # 초기에는 숨김 상태 - "커스텀 프롬프트" 선택 시에만 표시됨
+    custom_frame.pack(fill="both", expand=True, pady=(10, 0))  # 처음부터 표시
     
     tk.Label(custom_frame, text="커스텀 프롬프트 입력:", font=("Arial", 9, "bold")).pack(anchor="w", pady=(0, 5))
     
@@ -619,10 +619,11 @@ def choose_tone_with_window(selected_language: str) -> tuple:
         custom_frame,
         wrap=tk.WORD,
         width=85,
-        height=20,
+        height=15,
         font=("Consolas", 9)
     )
     custom_textbox.insert("1.0", template_example)
+    custom_textbox.config(state='disabled')  # 텍스트 삽입 후 비활성화
     custom_textbox.pack(fill="both", expand=True, pady=(0, 5))
     
     tk.Label(
