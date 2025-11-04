@@ -53,6 +53,7 @@ TONE_OPTIONS = [
     "Med/Pharma Pro (20y)",   # 의료기기/전문약사 20년 전문가
     "Beauty Pro (20y, chic)", # 세련된 뷰티 20년 전문가
     "GenZ Female (20s)",      # 20대 여성 타깃
+    "커스텀 프롬프트",        # 사용자 직접 입력
 ]
 
 OPENAI_MODEL = "gpt-4o"
@@ -324,7 +325,58 @@ def build_chinese_prompt(tagged_text: str, target_lang: str, glossary: dict | No
         f"번역할 텍스트:\n{tagged_text}"
     )
 
-def build_prompt(tagged_text: str, target_lang: str, tone: str, glossary: dict | None = None) -> str:
+def _apply_language_replacements(template: str, source_lang: str, target_lang: str) -> str:
+    """템플릿의 [A언어], [B언어]를 실제 언어명으로 치환"""
+    # 언어명 매핑
+    lang_map = {
+        "Korean": "한국어",
+        "English": "영어",
+        "Chinese (Simplified)": "중국어(간체)",
+        "Chinese (Traditional)": "중국어(번체)",
+        "Japanese": "일본어",
+        "Spanish": "스페인어",
+        "French": "프랑스어",
+        "German": "독일어",
+        "Italian": "이탈리아어",
+        "Portuguese": "포르투갈어",
+        "Russian": "러시아어",
+        "Indonesian": "인도네시아어",
+    }
+    
+    source_lang_display = lang_map.get(source_lang, source_lang)
+    target_lang_display = lang_map.get(target_lang, target_lang)
+    
+    result = template.replace("[A언어]", source_lang_display)
+    result = result.replace("[B언어]", target_lang_display)
+    
+    return result
+
+def build_prompt(tagged_text: str, target_lang: str, tone: str, glossary: dict | None = None, 
+                custom_prompt: str = "", source_lang: str = "Korean") -> str:
+    # 커스텀 프롬프트가 있으면 우선 사용
+    if custom_prompt:
+        # 언어 치환 및 마커 경고 추가
+        prompt_template = _apply_language_replacements(custom_prompt, source_lang, target_lang)
+        glossary_text = _format_glossary_lines(glossary)
+        
+        # 마커 경고가 없으면 추가
+        if "[[P#" not in prompt_template and "[[R#" not in prompt_template:
+            marker_warning = (
+                "\n\n중요: 단락 마커 [[P#]]...[[/P#]]와 런 마커 [[R#]]...[[/R#]]는 절대 변경하거나 제거하지 마세요.\n"
+                "- 단락 개수(P#)와 순서를 정확히 유지하세요.\n"
+                "- 마커 내부 텍스트만 번역하고, 마커 자체는 그대로 두세요.\n"
+            )
+            prompt_template += marker_warning
+        
+        # 용어집 추가
+        if glossary_text:
+            prompt_template += glossary_text
+        
+        # 번역할 텍스트 추가
+        prompt_template += f"\n\n번역할 텍스트:\n{tagged_text}"
+        
+        return prompt_template
+    
     # Chinese translation uses specialized prompt
     if "Chinese" in target_lang:
         return build_chinese_prompt(tagged_text, target_lang, glossary)
@@ -346,18 +398,20 @@ def build_prompt(tagged_text: str, target_lang: str, tone: str, glossary: dict |
 
 
 # ---------- [번역 호출] ----------
-def gpt_translate_tagged(tagged_text: str, client, target_lang: str, tone: str, use_deepseek=False, glossary: dict | None = None) -> str:
+def gpt_translate_tagged(tagged_text: str, client, target_lang: str, tone: str, use_deepseek=False, 
+                        glossary: dict | None = None, custom_prompt: str = "", source_lang: str = "Korean") -> str:
     # 진짜 내용이 없으면 번역 스킵
     if not tagged_text.strip() or is_effectively_empty_tagged(tagged_text):
         return ""
 
+    # 프롬프트 빌드
+    prompt = build_prompt(tagged_text, target_lang, tone, glossary, custom_prompt, source_lang)
+
     # 중국어 번역의 경우 DeepSeek 사용
     if "Chinese" in target_lang and use_deepseek:
         deepseek_client = create_deepseek_client()
-        prompt = build_chinese_prompt(tagged_text, target_lang, glossary)
         content = safe_request(deepseek_client, prompt, retries=3, delay=3, use_deepseek=True)
     else:
-        prompt = build_prompt(tagged_text, target_lang, tone, glossary)
         content = safe_request(client, prompt, retries=3, delay=3)
 
     # 실패 시 원문(마커 포함) 반환 → 원문 유지
@@ -472,7 +526,19 @@ def choose_language_with_window() -> str:
     return sel["value"]
 
 def choose_tone_with_window(selected_language: str) -> tuple:
-    sel = {"value": "", "use_deepseek": False}
+    sel = {"value": "", "custom_prompt": "", "use_deepseek": False}
+
+    def on_tone_change(*args):
+        """톤 선택 변경 시 텍스트 입력 필드 표시/숨김"""
+        selected = var.get().strip()
+        if selected == "커스텀 프롬프트":
+            custom_frame.pack(fill="both", expand=True, pady=(10, 0))
+            info.pack_forget()  # 기존 설명 숨김
+            win.geometry("750x700")  # 창 크기 확대
+        else:
+            custom_frame.pack_forget()
+            info.pack(anchor="w", pady=8)
+            win.geometry("450x280")  # 원래 크기로
 
     def on_start():
         v = var.get().strip()
@@ -480,15 +546,27 @@ def choose_tone_with_window(selected_language: str) -> tuple:
             from tkinter import messagebox  # type: ignore
             messagebox.showwarning("알림", "톤을 선택하세요.")
             return
+        
+        # 커스텀 프롬프트인 경우 입력된 텍스트 확인
+        if v == "커스텀 프롬프트":
+            custom_text = custom_textbox.get("1.0", tk.END).strip()
+            if not custom_text:
+                from tkinter import messagebox  # type: ignore
+                messagebox.showwarning("알림", "커스텀 프롬프트를 입력하세요.")
+                return
+            sel["custom_prompt"] = custom_text
+        
         sel["value"] = v
         sel["use_deepseek"] = deepseek_var.get()
         win.destroy()
 
     import tkinter as tk  # type: ignore
+    from tkinter import scrolledtext  # type: ignore
+    
     win = tk.Tk()
     win.title("Target Tone & DeepSeek Option")
     win.geometry("450x280")
-    win.resizable(False, False)
+    win.resizable(True, True)
 
     frm = tk.Frame(win, padx=12, pady=12)
     frm.pack(fill="both", expand=True)
@@ -496,8 +574,58 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     tk.Label(frm, text="번역 톤 선택:").pack(anchor="w", pady=(0, 6))
 
     var = tk.StringVar(value=TONE_OPTIONS[0])
+    var.trace("w", on_tone_change)  # 변경 감지
     opt = tk.OptionMenu(frm, var, *TONE_OPTIONS)
     opt.pack(fill="x")
+
+    # 커스텀 프롬프트 입력 영역 (초기에는 숨김)
+    custom_frame = tk.Frame(frm)
+    
+    tk.Label(custom_frame, text="커스텀 프롬프트 입력:", font=("Arial", 9, "bold")).pack(anchor="w", pady=(0, 5))
+    
+    # 템플릿 예시 제공
+    template_example = """#역할
+전문 [B언어] 번역가로서, 사용자가 입력한 모든 [A언어] 문장을 정확하고 자연스러운 [B언어]로 번역합니다.
+
+##주요 특징
+정확성: 프레젠테이션, 보고서, 비즈니스 문서 등에 적합한 공식적이고 세련된 표현 사용
+원어민이 봤을 때 절대 어색하지 않은 번역
+
+문맥 고려: 문장의 의미와 뉘앙스를 세밀하게 분석하여 적절한 표현으로 번역
+의미가 모호하거나 여러 해석이 가능한 경우, 사용자에게 반드시 확인 후 번역
+
+자연스러움 유지: 원문의 의도와 어조를 유지하되, [B언어]에서 자연스럽게 들리도록 문장 구조 조정 가능
+
+브랜드의 표기: [브랜드명]은 [영어 브랜드명]을 사용하며 [B언어]로 번역하지 않고 [영어 브랜드명] 유지
+
+스타일 조정 가능: 사용자의 피드백에 따라 격식체, 반격식체, 발표체 등 스타일을 즉시 조정
+
+###제한 사항
+번역 이외의 불필요한 설명 금지
+창의적 재해석 없이 원문에 충실한 번역 수행
+
+####검토
+번역 완료 후 재 검토하여 원어민이 봤을 때 어색한 부분이 있는지 검토하여 재 수정 하여 최종 번역본 출력
+
+참고: [A언어]는 자동으로 원본 언어(한국어)로, [B언어]는 대상 언어로 치환됩니다.
+마커 [[P#]]와 [[R#]]는 절대 변경하지 마세요."""
+    
+    custom_textbox = scrolledtext.ScrolledText(
+        custom_frame,
+        wrap=tk.WORD,
+        width=85,
+        height=20,
+        font=("Consolas", 9)
+    )
+    custom_textbox.insert("1.0", template_example)
+    custom_textbox.pack(fill="both", expand=True, pady=(0, 5))
+    
+    tk.Label(
+        custom_frame,
+        text="💡 팁: [A언어]는 원본 언어(한국어), [B언어]는 대상 언어로 자동 치환됩니다. [[P#]]와 [[R#]] 마커는 반드시 유지하세요.",
+        font=("Arial", 8),
+        fg="gray"
+    ).pack(anchor="w")
 
     # DeepSeek 사용 옵션 (중국어일 때만 표시)
     if "Chinese" in selected_language:
@@ -532,7 +660,8 @@ def choose_tone_with_window(selected_language: str) -> tuple:
             "- 기본값: 일반뷰티업계, 직역 최대한 회피\n"
             "- Med/Pharma Pro: 의료기기/전문약사 20년 전문가 톤\n"
             "- Beauty Pro (chic): 프리미엄 뷰티 전문가 톤\n"
-            "- GenZ Female: 20대 여성 타깃의 친근한 톤(과장·슬랭 과다 금지)"
+            "- GenZ Female: 20대 여성 타깃의 친근한 톤(과장·슬랭 과다 금지)\n"
+            "- 커스텀 프롬프트: 직접 프롬프트를 작성하여 사용"
         ),
     )
     info.pack(anchor="w", pady=8)
@@ -541,7 +670,7 @@ def choose_tone_with_window(selected_language: str) -> tuple:
 
     win.lift(); win.attributes("-topmost", True); win.after(200, lambda: win.attributes("-topmost", False))
     win.mainloop()
-    return sel["value"], sel["use_deepseek"]
+    return sel["value"], sel["use_deepseek"], sel.get("custom_prompt", "")
 
 
 def choose_font_scale_window() -> int:
@@ -594,11 +723,13 @@ def choose_font_scale_window() -> int:
 
 
 # ---------- [본 처리] ----------
-def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deepseek=False, font_scale_percent: int = 100, on_progress=None, glossary: dict | None = None):
+def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deepseek=False, font_scale_percent: int = 100, on_progress=None, glossary: dict | None = None, custom_prompt: str = ""):
     print(f"📂 파일: {pptx_path}")
     print(f"🌐 대상 언어: {target_lang}")
     print(f"🎙 톤: {tone}")
-    if target_lang == "Chinese" and use_deepseek:
+    if custom_prompt:
+        print("📝 커스텀 프롬프트 사용 중...")
+    if "Chinese" in target_lang and use_deepseek:
         print("🤖 DeepSeek 모델 사용 중...")
     else:
         print("🔑 OpenAI 클라이언트 초기화 중...")
@@ -710,7 +841,7 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
         block_tagged, style_maps, has_any = tag_paragraphs_block(paragraphs)
         if not has_any:
             return  # nothing to translate
-        translated_block = gpt_translate_tagged(block_tagged, client, target_lang, tone, use_deepseek, glossary)
+        translated_block = gpt_translate_tagged(block_tagged, client, target_lang, tone, use_deepseek, glossary, custom_prompt, "Korean")
         translated_block = translated_block.strip().strip('"').strip("'")
         if chinese_review_enabled:
             review_result = gpt_review_chinese_translation(block_tagged, translated_block, client, use_deepseek)
@@ -725,7 +856,7 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
                 tagged, style_map = tag_paragraph(p)
                 if not tagged:
                     continue
-                t = gpt_translate_tagged(tagged, client, target_lang, tone, use_deepseek, glossary)
+                t = gpt_translate_tagged(tagged, client, target_lang, tone, use_deepseek, glossary, custom_prompt, "Korean")
                 t = t.strip().strip('"').strip("'")
                 if chinese_review_enabled:
                     rr = gpt_review_chinese_translation(tagged, t, client, use_deepseek)
@@ -861,12 +992,12 @@ def main():
         print("❌ 언어를 선택하지 않았습니다. 종료합니다.")
         return
 
-    tone, use_deepseek = choose_tone_with_window(target_lang)
+    tone, use_deepseek, custom_prompt = choose_tone_with_window(target_lang)
     if not tone:
         print("❌ 톤을 선택하지 않았습니다. 종료합니다.")
         return
     font_scale = choose_font_scale_window()
-    translate_presentation(pptx_path, target_lang, tone, use_deepseek, font_scale_percent=font_scale)
+    translate_presentation(pptx_path, target_lang, tone, use_deepseek, font_scale_percent=font_scale, custom_prompt=custom_prompt)
 
 
 if __name__ == "__main__":
