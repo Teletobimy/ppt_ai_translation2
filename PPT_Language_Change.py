@@ -532,12 +532,16 @@ def choose_tone_with_window(selected_language: str) -> tuple:
         """톤 선택 변경 시 텍스트 입력 필드 표시/숨김"""
         selected = var.get().strip()
         if selected == "커스텀 프롬프트":
-            custom_frame.pack(fill="both", expand=True, pady=(10, 0))
+            custom_frame.pack(fill="both", expand=True, pady=(10, 0))  # 표시
             info.pack_forget()  # 기존 설명 숨김
+            if deepseek_frame:
+                deepseek_frame.pack_forget()  # DeepSeek 옵션도 숨김 (공간 확보)
             win.geometry("750x700")  # 창 크기 확대
         else:
-            custom_frame.pack_forget()
-            info.pack(anchor="w", pady=8)
+            custom_frame.pack_forget()  # 숨김
+            info.pack(anchor="w", pady=8)  # 설명 표시
+            if deepseek_frame:
+                deepseek_frame.pack(fill="x", pady=(10, 0), before=info)  # DeepSeek 옵션 다시 표시
             win.geometry("450x280")  # 원래 크기로
 
     def on_start():
@@ -578,8 +582,9 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     opt = tk.OptionMenu(frm, var, *TONE_OPTIONS)
     opt.pack(fill="x")
 
-    # 커스텀 프롬프트 입력 영역 (초기에는 숨김)
+    # 커스텀 프롬프트 입력 영역 (톤 선택 드롭다운 바로 아래에 위치, 초기에는 숨김)
     custom_frame = tk.Frame(frm)
+    # 초기에는 숨김 상태 - "커스텀 프롬프트" 선택 시에만 표시됨
     
     tk.Label(custom_frame, text="커스텀 프롬프트 입력:", font=("Arial", 9, "bold")).pack(anchor="w", pady=(0, 5))
     
@@ -651,6 +656,7 @@ def choose_tone_with_window(selected_language: str) -> tuple:
         deepseek_info.pack(anchor="w", pady=(2, 0))
     else:
         deepseek_var = tk.BooleanVar(value=False)
+        deepseek_frame = None  # DeepSeek 프레임이 없을 때를 대비
 
     # 간단한 설명 라벨
     info = tk.Label(
