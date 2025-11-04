@@ -359,14 +359,20 @@ def build_prompt(tagged_text: str, target_lang: str, tone: str, glossary: dict |
         prompt_template = _apply_language_replacements(custom_prompt, source_lang, target_lang)
         glossary_text = _format_glossary_lines(glossary)
         
-        # 마커 경고가 없으면 추가
-        if "[[P#" not in prompt_template and "[[R#" not in prompt_template:
+        # 마커 경고를 항상 강조하여 추가 (템플릿에 마커 설명이 있어도 명확히 강조)
+        if "[[P#" not in prompt_template or "[[R#" not in prompt_template:
             marker_warning = (
-                "\n\n중요: 단락 마커 [[P#]]...[[/P#]]와 런 마커 [[R#]]...[[/R#]]는 절대 변경하거나 제거하지 마세요.\n"
+                "\n\n⚠️ 매우 중요: 단락 마커 [[P#]]...[[/P#]]와 런 마커 [[R#]]...[[/R#]]는 절대 변경하거나 제거하지 마세요.\n"
                 "- 단락 개수(P#)와 순서를 정확히 유지하세요.\n"
                 "- 마커 내부 텍스트만 번역하고, 마커 자체는 그대로 두세요.\n"
+                "- 표(table) 셀 안의 텍스트도 동일하게 처리하세요.\n"
             )
-            prompt_template += marker_warning
+            # 마커 경고가 템플릿 끝에 있는지 확인하고, 없으면 추가
+            if "마커 [[P#" not in prompt_template and "[[P#]]" not in prompt_template:
+                prompt_template += marker_warning
+            else:
+                # 마커 설명이 있으면 더 강조
+                prompt_template += "\n\n⚠️ 위의 마커 규칙을 반드시 준수하세요. 표 셀의 텍스트도 포함합니다."
         
         # 용어집 추가
         if glossary_text:
@@ -911,6 +917,7 @@ def translate_presentation(pptx_path: str, target_lang: str, tone: str, use_deep
             for row in shape.table.rows:
                 for cell in row.cells:
                     if getattr(cell, "text_frame", None):
+                        # 표 셀의 텍스트도 커스텀 프롬프트를 사용하여 번역
                         process_paragraphs_block(cell.text_frame.paragraphs, chinese_review_enabled=("Chinese" in target_lang))
             return
 
