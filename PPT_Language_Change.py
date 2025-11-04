@@ -569,7 +569,7 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     
     win = tk.Tk()
     win.title("Target Tone & DeepSeek Option")
-    win.geometry("750x500")  # 초기 크기 확대 (텍스트 영역이 보이도록)
+    win.geometry("750x600")  # 초기 크기 확대 (텍스트 영역이 보이도록)
     win.resizable(True, True)
 
     frm = tk.Frame(win, padx=12, pady=12)
@@ -583,10 +583,10 @@ def choose_tone_with_window(selected_language: str) -> tuple:
     opt.pack(fill="x")
 
     # 커스텀 프롬프트 입력 영역 (톤 선택 드롭다운 바로 아래에 위치, 처음부터 보임)
-    custom_frame = tk.Frame(frm)
-    custom_frame.pack(fill="both", expand=True, pady=(10, 0))  # 처음부터 표시
+    custom_frame = tk.Frame(frm, relief=tk.RIDGE, bd=2)  # 테두리로 명확히 구분
+    custom_frame.pack(fill="both", expand=False, pady=(10, 0))  # 처음부터 표시
     
-    tk.Label(custom_frame, text="커스텀 프롬프트 입력:", font=("Arial", 9, "bold")).pack(anchor="w", pady=(0, 5))
+    tk.Label(custom_frame, text="커스텀 프롬프트 입력:", font=("Arial", 9, "bold"), bg="#f0f0f0").pack(anchor="w", pady=(5, 5), padx=5)
     
     # 템플릿 예시 제공
     template_example = """#역할
@@ -619,19 +619,21 @@ def choose_tone_with_window(selected_language: str) -> tuple:
         custom_frame,
         wrap=tk.WORD,
         width=85,
-        height=15,
-        font=("Consolas", 9)
+        height=12,  # 높이 명시
+        font=("Consolas", 9),
+        bg="white"  # 배경색 명시
     )
     custom_textbox.insert("1.0", template_example)
     custom_textbox.config(state='disabled')  # 텍스트 삽입 후 비활성화
-    custom_textbox.pack(fill="both", expand=True, pady=(0, 5))
+    custom_textbox.pack(fill="both", expand=True, pady=(0, 5))  # expand=True로 복원 (스크롤 작동을 위해)
     
     tk.Label(
         custom_frame,
         text="💡 팁: [A언어]는 원본 언어(한국어), [B언어]는 대상 언어로 자동 치환됩니다. [[P#]]와 [[R#]] 마커는 반드시 유지하세요.",
         font=("Arial", 8),
-        fg="gray"
-    ).pack(anchor="w")
+        fg="gray",
+        bg="#f0f0f0"
+    ).pack(anchor="w", padx=5, pady=(0, 5))
 
     # DeepSeek 사용 옵션 (중국어일 때만 표시)
     if "Chinese" in selected_language:
